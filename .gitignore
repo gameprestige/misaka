@@ -1,0 +1,4 @@
+node_modules
+*.log
+config/*.js
+.idea

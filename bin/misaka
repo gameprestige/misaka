@@ -1,0 +1,13 @@
+#! /usr/bin/env node
+
+var facter = require("../utils/facter");
+
+facter.query("fqdn", function(err, facts) {
+    if (err) {
+        console.error("fail to get fqdn. [err:%s]", err);
+        process.exit(1);
+        return;
+    }
+
+    require("../app").start(facts.fqdn);
+});
