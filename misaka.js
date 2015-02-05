@@ -7,9 +7,22 @@ var _ = require("underscore");
 var debug = require("debug")("misaka");
 var EventEmitter = require("events").EventEmitter;
 
+var Message = require("./utils/message");
+var CommandQueue = require("./utils/command_queue");
+
 function Misaka(app) {
     this._app = app;
     this._channels = {};
+
+    var me = this;
+    this._watcher = function(queue) {
+        me.send({
+            text: queue.output,
+            to: queue.to,
+            jobId: queue.jobId,
+            jobHash: queue.jobHash
+        });
+    };
 }
 
 module.exports = Misaka;
@@ -53,11 +66,13 @@ Misaka.prototype.channel = function(name, cmd) {
  * @param {String|Object} msg 一段文本消息，或一个对象。对象格式如下：
  *                            {
  *                                text: "hello", // 消息文本
- *                                to: "huandu"   // 指定接收的用户名，"everyone" 代表所有人，默认不指定任何人
+ *                                to: "huandu",  // 指定接收的用户名，"everyone" 代表所有人，默认不指定任何人
+ *                                jobId: 12,     // 指定消息与这个任务关联
+ *                                jobHash: "..." // 任务 hash，必须与 jobId 一起提供才有用
  *                            }
  */
 Misaka.prototype.send = function(msg) {
-    var text, to;
+    var text, to, jobId, jobHash;
 
     if (!msg) {
         return;
@@ -66,12 +81,27 @@ Misaka.prototype.send = function(msg) {
     if (typeof msg === "object") {
         text = msg.text || "";
         to = msg.to || "";
+        jobId = msg.jobId || 0;
+        jobHash = msg.jobHash || "";
     } else {
         text = msg + "";
         to = "";
+        jobId = 0;
+        jobHash = "";
     }
 
     if (!text) {
+        return;
+    }
+
+    // 走任务专用通道
+    if (jobId && jobHash) {
+        this._app.send("job", {
+            to: to,
+            text: text,
+            jobId: jobId,
+            jobHash: jobHash
+        });
         return;
     }
 
@@ -95,11 +125,17 @@ Misaka.prototype.register = function() {
     _.each(this._channels, function(ch, name) {
         // 向 last order 注册自定义命令
         var cmd = ch.cmd;
+        var sample = cmd.sample || "";
+
+        if (Array.isArray(sample)) {
+            sample = sample.join("\n");
+        }
 
         app.send("register", {
             name: name,
             usage: cmd.usage,
-            help: cmd.help
+            help: cmd.help,
+            sample: sample
         });
     });
 };
@@ -111,15 +147,33 @@ Misaka.prototype.register = function() {
  * @param cb
  */
 Misaka.prototype.dispatch = function(cmd, cb) {
-    var msg = new Message(cmd, cb);
+    var msg = new Message(cmd.cmd, cb);
+    msg.queue = new CommandQueue(cmd, function(err) {
+        if (!err) {
+            msg.send(msg.queue.output);
+            return;
+        }
+
+        var lines = [msg.queue.output];
+
+        lines.push("");
+        lines.push("御坂执行命令失败，错误码 " + err.code + (err.signal? "，信号量 " + err.signal: ""));
+        lines.push("御坂提醒道，下面是所有的错误输出，请注意查看：");
+        lines.push("```");
+        lines.push(msg.queue.errors);
+        lines.push("```");
+
+        msg.error(lines.join("\n"));
+    });
+
     var found = _.some(this._channels, function(ch, name) {
-        var match = ch.cmd.pattern.exec(cmd);
+        var match = ch.cmd.pattern.exec(msg.cmd);
 
         if (!match) {
             return false;
         }
 
-        debug("dispatching cmd... [name:%s] [cmd:%s]", name, cmd);
+        debug("dispatching cmd... [name:%s] [cmd:%s]", name, msg.cmd);
         msg.name = name;
         msg.match = match;
         ch.channel.emit("message", msg);
@@ -130,35 +184,74 @@ Misaka.prototype.dispatch = function(cmd, cb) {
         return;
     }
 
-    debug("cannot find script to handle cmd. [cmd:%s]", cmd);
-    msg.error("御坂不支持这个命令：" + cmd);
-};
-
-function Message(cmd, cb) {
-    this.cmd = cmd;
-    this.name = "";
-    this.match = null;
-
-    this._cb = cb;
-}
-
-/**
- * 发送一个正常回复。
- * @param {String} text
- */
-Message.prototype.send = function(text) {
-    this._cb({
-        text: text
-    });
+    debug("cannot find script to handle cmd. [cmd:%s]", msg.cmd);
+    msg.error("御坂不支持这个命令：" + msg.cmd);
 };
 
 /**
- * 发送一个回复，出错时调用。
- * @param {String} text
+ * 响应 last order 的控制命令。
+ * @param {Object} cmd
  */
-Message.prototype.error = function(text) {
-    this._cb({
-        error: true,
-        text: text
-    });
+Misaka.prototype.jobControl = function(cmd) {
+    var action = cmd.action
+    var jobId = cmd.jobId;
+    var jobHash = cmd.jobHash;
+    var isStatus = action === "status";
+
+    var queue = CommandQueue.find(jobId);
+
+    if (!queue) {
+        debug("job is not found. [action:%s] [job-id:%s] [job-hash:%s]", action, jobId, jobHash);
+
+        if (isStatus) {
+            this.send({
+                text: "御坂充满怀疑的回复道，指定的任务 " + jobId + " 并不存在，或许早就结束了吧。",
+                jobId: jobId,
+                jobHash: jobHash
+            });
+        }
+
+        return;
+    }
+
+    if (queue.jobHash !== jobHash) {
+        debug("job was stopped or forgot by last order. stop again. [action:%s] [job-id:%s] [job-hash:%s]", action, jobId, jobHash);
+        queue.stop();
+
+        if (isStatus) {
+            this.send({
+                text: "御坂好奇的回答道，指定的任务 " + jobId + " 存在但是签名不匹配，或许御坂御坂强行遗忘了吧。",
+                jobId: jobId,
+                jobHash: jobHash
+            });
+        }
+
+        return;
+    }
+
+    if (isStatus) {
+        this.send({
+            text: "御坂确定的回答道，指定的任务 " + jobId + " " + (queue.isDone()? "已经完成。": "仍在执行中，当前命令是：\n" + queue.current()),
+            jobId: jobId,
+            jobHash: jobHash
+        });
+        return;
+    }
+
+    switch (action) {
+        case "watch":
+            queue.addWatcher(this._watcher);
+            break;
+
+        case "unwatch":
+            queue.removeWatcher(this._watcher);
+            break;
+
+        case "stop":
+            queue.stop();
+            break;
+
+        default:
+            debug("unknown action. [action:%s] [job-id:%s] [job-hash:%s]", action, jobId, jobHash);
+    }
 };

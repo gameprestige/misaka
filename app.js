@@ -117,6 +117,9 @@ App.prototype.login = function(cb) {
         socket.on("cmd", function(cmd, response) {
             me._misaka.dispatch(cmd, response);
         });
+        socket.on("job", function(cmd) {
+            me._misaka.jobControl(cmd);
+        });
     }
 };
 
@@ -183,7 +186,8 @@ App.prototype.tryLogin = function(cb) {
 
             var socket = io(me.makeUrl("/misaka", {token: body}), {
                 reconnection: false,
-                multiplex: false
+                multiplex: false,
+                transports: ["websocket", "polling"]
             });
             cb(null, socket);
         });

@@ -31,20 +31,19 @@ exports.query = function(facts, cb) {
 
     // 过滤非法输入
     var re = /^[0-9a-z][0-9a-z_-]*$/i;
-    var argv = ["--json"];
+    var argv = ["facter", "--json"];
     argv.push.apply(argv, facts.filter(function(fact) {
         return re.test(fact);
     }));
 
     var output = "";
-    var facterBin = "/usr/bin/facter";
-    var facter = spawn(facterBin, argv);
+    var facter = spawn("/usr/bin/env", argv);
     facter.stdout.on("data", function(data) {
         output += data;
     });
     facter.on("close", function(code) {
         if (code) {
-            debug("fail to call facter. [code:%d] [cmd:%s %s]", code, facterBin, argv.join(" "));
+            debug("fail to call facter. [code:%d] [cmd:%s %s]", code, argv.join(" "));
             cb(new Error("fail to call facter"));
             return;
         }

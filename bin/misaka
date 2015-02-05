@@ -9,5 +9,7 @@ facter.query("fqdn", function(err, facts) {
         return;
     }
 
-    require("../app").start(facts.fqdn);
+    // 如果外部指定了 fqdn 则直接使用指定值，这可以方便本地开多个 misaka 进行测试。
+    var fqdn = process.env.MISAKA_FQDN || facts.fqdn;
+    require("../app").start(fqdn);
 });
