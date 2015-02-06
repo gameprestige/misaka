@@ -3,6 +3,8 @@
  */
 "use strict";
 
+var _ = require("underscore");
+
 module.exports = function(misaka) {
     var puppet = misaka.channel("puppet", {
         usage: "puppet <category...>",
@@ -14,10 +16,10 @@ module.exports = function(misaka) {
             return s;
         });
 
-        if (!cmds.length) {
-            cmds = ["help"];
+        if (!cmds.length || _.indexOf(cmds, "help") >= 0) {
+            cmds = ["-h"];
         }
 
-        msg.queue.exec(["/usr/bin/env", "run-puppet", cmds]);
+        msg.queue.exec(["sudo", "/usr/bin/env", "run-puppet", cmds]);
     });
 };

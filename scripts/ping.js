@@ -23,7 +23,7 @@ module.exports = function(misaka, config) {
         msg.send("PONG");
     });
 
-    var pingText = misaka.channel("ping-text", {
+    var pingText = misaka.channel("ping text", {
         usage: "ping <text>",
         help: "确认御坂是否在线的同时让御坂复述一句话",
         sample: [
