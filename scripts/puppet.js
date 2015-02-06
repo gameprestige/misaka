@@ -20,6 +20,6 @@ module.exports = function(misaka) {
             cmds = ["-h"];
         }
 
-        msg.queue.exec(["sudo", "/usr/bin/env", "run-puppet", cmds]);
+        msg.queue.exec(["sudo", "/usr/bin/env", "run-puppet", "--color=false", cmds]);
     });
 };
