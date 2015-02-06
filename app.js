@@ -16,6 +16,7 @@ var debug = require("debug")("misaka");
 var setImmediate = require("timers").setImmediate;
 
 var Misaka = require("./misaka");
+var Logger = require("./utils/logger");
 
 var LOGIN_RETRY_INTERVAL = 5 * 1000; // 5s 重试一次
 
@@ -293,8 +294,9 @@ function loadScripts(cb) {
 
         try {
             cb(require(script), require(config));
+            Logger.info("loaded script. [script:%s] [config:%s]", script, config);
         } catch (e) {
-            debug("fail to load script. [script:%s] [config:%s] [err:%s]", script, config, e);
+            Logger.warn("fail to load script. [script:%s] [config:%s] [err:%s]", script, config, e);
         }
     });
 }

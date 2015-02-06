@@ -67,7 +67,9 @@ CommandQueue.prototype.exec = function(cmd, cb) {
 
     runningJobs[this.jobId] = this;
 
-    if (!Array.isArray(cmd)) {
+    if (Array.isArray(cmd)) {
+        cmd = _.flatten(cmd);
+    } else {
         cmd = ["/usr/bin/env", "sh", "-c", cmd + ""];
     }
 
@@ -299,6 +301,14 @@ CommandQueue.prototype.doExec = function() {
      * @param [err]
      */
     function next(err) {
+        if (info.cb) {
+            try {
+                info.cb(err, me);
+            } catch (e) {
+                debug("fail to call command handler. [err:%s]", e);
+            }
+        }
+
         if (err) {
             me.skip();
             me._isDone = true;
