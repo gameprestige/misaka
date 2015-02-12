@@ -22,6 +22,7 @@ function Misaka(app) {
             jobId: queue.jobId,
             jobHash: queue.jobHash
         });
+        queue.output = "";
     };
 }
 
@@ -150,11 +151,11 @@ Misaka.prototype.dispatch = function(cmd, cb) {
     var msg = new Message(cmd.cmd, cb);
     msg.queue = new CommandQueue(cmd, function(err) {
         if (!err) {
-            msg.send(msg.queue.output);
+            msg.send("```" + msg.queue.output + "```");
             return;
         }
 
-        var lines = [msg.queue.output];
+        var lines = ["```", msg.queue.output, "```"];
 
         lines.push("");
         lines.push("御坂执行命令失败，错误码 " + err.code + (err.signal? "，信号量 " + err.signal: ""));

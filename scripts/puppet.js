@@ -20,6 +20,21 @@ module.exports = function(misaka) {
             cmds = ["-h"];
         }
 
-        msg.queue.exec(["sudo", "/usr/bin/env", "run-puppet", "--color=false", cmds]);
+        var queue = msg.queue;
+
+        // 如果装了 rvm，需要使用 rvmsudo
+        queue.exec("which rvmsudo", function(err) {
+            var sudo;
+
+            // 没有安装 rvm，使用普通 sudo
+            if (err) {
+                sudo = "sudo";
+            } else {
+                sudo = "rvmsudo";
+            }
+
+            queue.output = queue.errors = "";
+            queue.exec([sudo, "/usr/bin/env", "run-puppet", "--color=false", cmds]);
+        });
     });
 };

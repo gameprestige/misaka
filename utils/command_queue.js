@@ -58,11 +58,17 @@ CommandQueue.find = function(jobId) {
 /**
  * 执行一条命令，
  * @param {String|Array} cmd 可以是一个文本形式的命令行，也可以是预先分割好的数组
+ * @param {Object|Function} [options] child_process.spawn 的 options
  * @param {Function} [cb] function(err, queue) 可选的回调，当这条命令结束时调用
  */
-CommandQueue.prototype.exec = function(cmd, cb) {
+CommandQueue.prototype.exec = function(cmd, options, cb) {
     if (this._isDone) {
         return this;
+    }
+
+    if (typeof options === "function") {
+        cb = options;
+        options = null;
     }
 
     runningJobs[this.jobId] = this;
@@ -75,6 +81,7 @@ CommandQueue.prototype.exec = function(cmd, cb) {
 
     this._queue.push({
         cmd: cmd,
+        options: options,
         cb: cb
     });
     this.scheduleExec();
@@ -253,7 +260,14 @@ CommandQueue.prototype.doExec = function() {
     var me = this;
     var exitCode = null;
     var cmd = info.cmd;
-    var proc = spawn(cmd[0], cmd.slice(1));
+    var proc;
+
+    if (info.options) {
+        proc = spawn(cmd[0], cmd.slice(1), info.options);
+    } else {
+        proc = spawn(cmd[0], cmd.slice(1));
+    }
+
     info.proc = proc;
 
     proc.stdout.on("data", function(data) {
