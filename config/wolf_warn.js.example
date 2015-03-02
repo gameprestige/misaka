@@ -1,5 +1,0 @@
-"use strict";
-
-exports.logs = [
-    "/path/to/file.log"
-];

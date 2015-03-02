@@ -7,8 +7,8 @@ var _ = require("underscore");
 
 var facter = require("../utils/facter");
 
-module.exports = function(misaka) {
-    var facts = misaka.channel("facter", {
+module.exports = function() {
+    var facts = this.channel("facter", {
         usage: "facter <facts...>",
         help: "查询任意的 facter，不知道什么是 facter，御坂建议去问问谷歌娘",
         sample: [
@@ -36,7 +36,6 @@ module.exports = function(misaka) {
             }
 
             var lines = [];
-            var key;
 
             lines.push("御坂找到了以下的 facts：");
             lines.push("```");

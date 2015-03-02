@@ -3,8 +3,8 @@
  */
 "use strict";
 
-module.exports = function(misaka) {
-    var time = misaka.channel("time", {
+module.exports = function() {
+    var time = this.channel("time", {
         usage: "time",
         help: "报告御坂当前时间",
         pattern: /^time\s*$/i

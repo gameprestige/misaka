@@ -15,16 +15,25 @@ var MAX_FILE_READ_SIZE = 256 * 1024; // 256KB
 
 /**
  * LogScanner 可以用来监听任意数量的文件变化量，一旦有变化就通过 cb 通知调用者。
- * @param {Array} logs
  * @param {Function} cb function(files, scanner)
  * @constructor
  */
-function LogScanner(logs, cb) {
-    this._logs = logs;
+function LogScanner(cb) {
     this._cb = cb;
 
+    this._logs = [];
     this._stats = {};
     this._timer = null;
+    this._brain = null;
+    this._brainKey = "";
+
+    var me = this;
+    this._brainLogsChanged = function(logs) {
+        me._logs = logs || [];
+    };
+    this._brainStatsChanged = function(stats) {
+        me._stats = stats || {};
+    };
 }
 
 module.exports = LogScanner;
@@ -64,6 +73,11 @@ LogScanner.prototype.addLog = function(log) {
     }
 
     this._logs.push(log);
+
+    if (this._brain) {
+        this._brain.set(this._brainKey + "/logs", this._logs);
+    }
+
     return this;
 };
 
@@ -72,9 +86,32 @@ LogScanner.prototype.addLog = function(log) {
  * @param log
  */
 LogScanner.prototype.removeLog = function(log) {
-    this._logs = this._logs.filter(function(l) {
+    var len = this._logs.length;
+    var logs = this._logs.filter(function(l) {
         return l !== log;
     });
+
+    if (this._brain) {
+        if (len !== this._logs.length) {
+            this._brain.set(this._brainKey + "/logs", logs);
+        }
+    } else {
+        this._logs = logs;
+    }
+
+    return this;
+};
+
+/**
+ * 移除所有的 log 文件。
+ */
+LogScanner.prototype.removeAllLogs = function() {
+    if (this._brain) {
+        this._brain.set(this._brainKey + "/logs", []);
+    } else {
+        this._logs = [];
+    }
+
     return this;
 };
 
@@ -87,10 +124,30 @@ LogScanner.prototype.started = function() {
 
 /**
  * 获得所有监听的文件。
- * @returns {*}
+ * @returns {Array}
  */
 LogScanner.prototype.logs = function() {
     return this._logs;
+};
+
+/**
+ * 让 LogScanner 能通过 brain 将自己的状态存到 last order 上，以便持久化自身状态。
+ * @param {Brain} brain
+ * @param {String} key
+ */
+LogScanner.prototype.setBrain = function(brain, key) {
+    if (this._brain) {
+        this._brain.removeListener("change:" + this._brainKey + "/stats", this._brainStatsChanged);
+        this._brain.removeListener("change:" + this._brainKey + "/logs", this._brainLogsChanged);
+    }
+
+    this._brain = brain;
+    this._brainKey = key;
+    brain.on("change:" + this._brainKey + "/stats", this._brainStatsChanged);
+    brain.on("change:" + this._brainKey + "/logs", this._brainLogsChanged);
+    this._stats = brain.get(this._brainKey + "/stats") || {};
+    this._logs = brain.get(this._brainKey + "/logs") || [];
+    return this;
 };
 
 /**
@@ -153,6 +210,12 @@ LogScanner.prototype.monitor = function() {
         });
 
         scanLogs(changedLogs, stats, function(files) {
+            if (me._brain) {
+                me._brain.set(me._brainKey + "/stats", stats);
+            } else {
+                me._stats = stats;
+            }
+
             if (me._cb) {
                 try {
                     me._cb(files, me);

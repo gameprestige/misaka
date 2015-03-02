@@ -41,12 +41,6 @@ module.exports = new App();
 App.prototype.start = function(node) {
     debug("starting with name '%s'...", node);
     this._node = node;
-
-    var misaka = this._misaka;
-    loadScripts(function(script, config) {
-        script(misaka, config);
-    });
-
     this.connect();
 };
 
@@ -54,9 +48,10 @@ App.prototype.start = function(node) {
  * 向 last order 的指定 channel 发送一段消息。
  * @param {String} channel
  * @param data
+ * @param {Function} [cb]
  */
-App.prototype.send = function(channel, data) {
-    this._sendingQueue.push([channel, data]);
+App.prototype.send = function(channel, data, cb) {
+    this._sendingQueue.push([].slice.apply(arguments));
     this.scheduleFlush();
 };
 
@@ -98,28 +93,22 @@ App.prototype.login = function(cb) {
             return;
         }
 
-        debug("socket is connecting...");
+        Logger.info("socket is connecting...");
 
         me._socket = socket;
         socket.on("connect", function() {
-            debug("misaka connects to last order.");
-            me._misaka.register();
+            Logger.info("misaka connects to last order.");
+            me._misaka.handleSocket(socket);
             me._connected = true;
             cb(socket);
         });
         socket.on("disconnect", function() {
-            debug("misaka losts connection with last order.");
+            Logger.info("misaka losts connection with last order.");
             me._socket = null;
             me._connected = false;
 
             // 尝试重新连接
             me.connect();
-        });
-        socket.on("cmd", function(cmd, response) {
-            me._misaka.dispatch(cmd, response);
-        });
-        socket.on("job", function(cmd) {
-            me._misaka.jobControl(cmd);
         });
     }
 };
@@ -230,7 +219,7 @@ App.prototype.flush = function() {
                 return;
             }
 
-            socket.emit(data[0], data[1]);
+            socket.emit.apply(socket, data);
         });
 
         // 确保没有更多数据要发送
@@ -269,34 +258,4 @@ function strDigest(str, secret) {
     var hmacSHA1 = crypto.createHmac("sha1", secret);
     hmacSHA1.update(str);
     return hmacSHA1.digest("base64");
-}
-
-/**
- * 加载所有启用的脚本。
- * 只有 config 目录下有配置的脚本才算启用。
- * 比如要启用 scripts/ping.js，必须有一个 config/ping.js 存在才可以启用。
- * @param {Function} cb function(script, config)
- */
-function loadScripts(cb) {
-    var configFiles = fs.readdirSync(path.join(__dirname, "config"));
-
-    // 只保留 *.js 文件
-    var re = /\.js$/i;
-    configFiles = _.filter(configFiles, function(file) {
-        return re.test(file);
-    });
-
-    // 尝试加载 scripts 目录对应文件
-    _.each(configFiles, function(file) {
-        var name = path.basename(file, ".js");
-        var config = "./config/" + name;
-        var script = "./scripts/" + name;
-
-        try {
-            cb(require(script), require(config));
-            Logger.info("loaded script. [script:%s] [config:%s]", script, config);
-        } catch (e) {
-            Logger.warn("fail to load script. [script:%s] [config:%s] [err:%s]", script, config, e);
-        }
-    });
 }

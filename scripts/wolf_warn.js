@@ -4,13 +4,12 @@
 "use strict";
 
 var _ = require("underscore");
-
 var debug = require("debug")("misaka");
 
 var LogScanner = require("../utils/log_scanner");
 
-module.exports = function(misaka, config) {
-    var scanner = new LogScanner(config.logs || [], function(files) {
+module.exports = function(misaka) {
+    var scanner = new LogScanner(function(files) {
         var lines = [];
         _.each(files, function(content, log) {
             if (!content) {
@@ -26,9 +25,15 @@ module.exports = function(misaka, config) {
 
         misaka.send("御坂发现新的错误日志！御坂大声警告所有人\n" + lines.join("\n\n"));
     });
-    scanner.start();
+    scanner.setBrain(misaka.brain, "warn_log");
+    this.on("enabled", function() {
+        scanner.start();
+    });
+    this.on("disabled", function() {
+        scanner.stop();
+    });
 
-    var changeStatus = misaka.channel("warn log switch", {
+    var changeStatus = this.channel("warn log switch", {
         usage: "warn log [on|off]",
         help: "让御坂开始或停止监控错误日志，默认已启用监控",
         pattern: /^warn\s+log\s+(on|off|start|stop|pause)\s*$/i
@@ -45,7 +50,7 @@ module.exports = function(misaka, config) {
         }
     });
 
-    var addLog = misaka.channel("warn log add", {
+    var addLog = this.channel("warn log add", {
         usage: "warn log add <file...>",
         help: "添加新的文件到监控列表",
         pattern: /^warn\s+log\s+add\s*(.*)/i
@@ -57,16 +62,15 @@ module.exports = function(misaka, config) {
 
         _.each(files, function(file) {
             if (!file) {
-                return false;
+                return;
             }
 
             if (file[0] !== '/') {
                 wrongFiles.push(file);
-                return false;
+                return;
             }
 
             scanner.addLog(file);
-            return true;
         });
 
         if (wrongFiles.length) {
@@ -84,7 +88,27 @@ module.exports = function(misaka, config) {
         msg.send(lines.join("\n"));
     });
 
-    var status = misaka.channel("warn log status", {
+    var removeLog = this.channel("warn log remove", {
+        usage: "warn log add <file...>",
+        help: "从监控列表移除文件",
+        pattern: /^warn\s+log\s+remove\s*(.*)/i
+    });
+    removeLog.on("message", function(msg) {
+        var files = msg.match[1].split(/\s+/);
+        var lines = [];
+
+        _.each(files, function(file) {
+            scanner.removeLog(file);
+        });
+
+        var logs = scanner.logs();
+        lines.push("当前御坂正在监控的日志包括：");
+        listLogs(logs, lines);
+
+        msg.send(lines.join("\n"));
+    });
+
+    var status = this.channel("warn log status", {
         usage: "warn log status",
         help: "查看当前日志监控状态以及监控文件详情",
         pattern: /^warn\s+log(\s+status)?\s*$/i

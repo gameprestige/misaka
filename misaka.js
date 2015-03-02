@@ -9,10 +9,15 @@ var EventEmitter = require("events").EventEmitter;
 
 var Message = require("./utils/message");
 var CommandQueue = require("./utils/command_queue");
+var Brain = require("./utils/brain");
+var Script = require("./utils/script");
+var Logger = require("./utils/logger");
+
+var BRAIN_SAVE_TIMEOUT = 5000; // 单位毫秒
 
 function Misaka(app) {
     this._app = app;
-    this._channels = {};
+    this._scripts = {};
 
     var me = this;
     this._watcher = function(queue) {
@@ -24,43 +29,34 @@ function Misaka(app) {
         });
         queue.output = "";
     };
+    Object.defineProperty(this, "brain", {
+        value: new Brain(function(patches, cb) {
+            var done = false;
+
+            // 如果规定时间内还没保存成功，也许是连不上 last order 了，放弃。
+            var timer = setTimeout(function() {
+                done = true;
+                cb(new Error("timeout when saving patches"));
+            }, BRAIN_SAVE_TIMEOUT);
+
+            me._app.send("brain-patch", patches, function(values) {
+                if (done) {
+                    return;
+                }
+
+                if (timer) {
+                    clearTimeout(timer);
+                    timer = null;
+                }
+
+                done = true;
+                cb(null, values);
+            });
+        })
+    });
 }
 
 module.exports = Misaka;
-
-/**
- * 创建一个新的业务级 channel，并且规定如何通过命令来操作这个管道。
- *
- * 例子详见 scripts 里面的 ping.js
- *
- * @param {String} name
- * @param {Object} cmd 命令配置，格式为：
- *                 {
- *                     usage: "run-puppet <type>",                // 用法描述
- *                     help: "将执行 run-puppet 命令，御坂谨慎的说", // 一段文字描述，格式必须是：xx，御坂yy的zz。xx 是描述，yy 是形容词，zz 是动词。
- *                     pattern: /run-puppet (\w+)/i               // 用来匹配命令的正则表达式
- *                 }
- */
-Misaka.prototype.channel = function(name, cmd) {
-    var channels = this._channels;
-
-    if (channels.hasOwnProperty(name)) {
-        debug("channel name has been used. [channel:%s]", name);
-        throw new Error("channel name has been used");
-    }
-
-    if (!cmd || !cmd.usage || !cmd.help || !cmd.pattern) {
-        debug("missing required field in cmd. [cmd:%s]", JSON.stringify(cmd));
-        throw new Error("missing required field in cmd");
-    }
-
-    var channel = new EventEmitter();
-    channels[name] = {
-        channel: channel,
-        cmd: cmd
-    };
-    return channel;
-};
 
 /**
  * 向聊天室发消息。
@@ -118,83 +114,118 @@ Misaka.prototype.send = function(msg) {
 };
 
 /**
- * 向 last order 注册自己。
- * 每次连接上 last order 之后都会调用这个函数用来注册 channel。
+ * 监听 socket 的各个有趣的频道。
+ * 注意：永远不要保存 socket，因为 app 可能会因为断网而抛弃老的 socket。
+ * @param socket
  */
-Misaka.prototype.register = function() {
-    var app = this._app;
-    _.each(this._channels, function(ch, name) {
-        // 向 last order 注册自定义命令
-        var cmd = ch.cmd;
-        var sample = cmd.sample || "";
+Misaka.prototype.handleSocket = function(socket) {
+    var me = this;
+    socket.on("cmd", function(cmd, response) {
+        dispatch(me, cmd, response);
+    });
+    socket.on("job", function(cmd) {
+        jobControl(me, cmd);
+    });
+    socket.on("scripts", function(action, scriptStatus) {
+        scriptsControl(me, action, scriptStatus);
+    });
+    socket.on("brain", function(data) {
+        me.brain.load(data);
+    });
+    me.brain.save();
+};
 
-        if (Array.isArray(sample)) {
-            sample = sample.join("\n");
+/**
+ * 通过 channel 的 tag 来查找 channel 信息，只有启用了的 script 的 channel 会被返回。
+ * @param [tag] 如果不提供 tag 则返回所有的 channel 信息
+ * @return {Array} 返回所有匹配的 channel 信息，如果找不到匹配的 channel 返回 []
+ */
+Misaka.prototype.findChannels = function(tag) {
+    var matches = [];
+
+    _.each(this._scripts, function(script) {
+        if (!script.enabled) {
+            return;
         }
 
-        app.send("register", {
-            name: name,
-            usage: cmd.usage,
-            help: cmd.help,
-            sample: sample
-        });
+        var m = script.findChannels(tag);
+
+        if (m.length) {
+            matches = matches.concat(m);
+        }
     });
+
+    return matches;
+};
+
+/**
+ * 检查一个脚本是否启用。
+ * @param name
+ */
+Misaka.prototype.enabled = function(name) {
+    return this._scripts.hasOwnProperty(name) && this._scripts[name].enabled;
 };
 
 /**
  * 派发命令，通过正则表达式选择一个匹配的命令。
  * 注意，script 需要自行保证自己正则表达式的全局唯一性，一般有一个合适的命令前缀就不会有问题。
+ * @param {Misaka} misaka
  * @param cmd
  * @param cb
  */
-Misaka.prototype.dispatch = function(cmd, cb) {
-    var msg = new Message(cmd.cmd, cb);
-    msg.queue = new CommandQueue(cmd, function(err) {
-        if (!err) {
-            msg.send("```" + msg.queue.output + "```");
-            return;
-        }
-
-        var lines = ["```", msg.queue.output, "```"];
-
-        lines.push("");
-        lines.push("御坂执行命令失败，错误码 " + err.code + (err.signal? "，信号量 " + err.signal: ""));
-        lines.push("御坂提醒道，下面是所有的错误输出，请注意查看：");
-        lines.push("```");
-        lines.push(msg.queue.errors);
-        lines.push("```");
-
-        msg.error(lines.join("\n"));
-    });
-
-    var found = _.some(this._channels, function(ch, name) {
-        var match = ch.cmd.pattern.exec(msg.cmd);
-
-        if (!match) {
+function dispatch(misaka, cmd, cb) {
+    var msg = new Message(cmd.cmd || "help", cb);
+    var dispatcher = null;
+    _.some(misaka._scripts, function(script) {
+        if (!script.enabled) {
             return false;
         }
 
-        debug("dispatching cmd... [name:%s] [cmd:%s]", name, msg.cmd);
-        msg.name = name;
-        msg.match = match;
-        ch.channel.emit("message", msg);
-        return true;
+        dispatcher = script.matchChannel(msg.cmd);
+        return !!dispatcher;
     });
 
-    if (found) {
+    if (!dispatcher) {
+        Logger.info("cannot find script to handle cmd. [cmd:%s]", msg.cmd);
+        msg.error("御坂不支持这个命令：" + msg.cmd);
         return;
     }
 
-    debug("cannot find script to handle cmd. [cmd:%s]", msg.cmd);
-    msg.error("御坂不支持这个命令：" + msg.cmd);
-};
+    Logger.info("dispatching cmd... [cmd:%s]", msg.cmd);
+    msg.queue = new CommandQueue(cmd, function(err) {
+        var lines = ["```", msg.queue.output, "```"];
+        var text;
+
+        if (err) {
+            lines.push("");
+            lines.push("御坂执行命令失败，错误码 " + err.code + (err.signal? "，信号量 " + err.signal: ""));
+        }
+
+        if (!/^\s*$/.test(msg.queue.errors)) {
+            lines.push("御坂提醒道，下面是所有的错误输出，请注意查看：");
+            lines.push("```");
+            lines.push(msg.queue.errors);
+            lines.push("```");
+        }
+
+        text = lines.join("\n");
+
+        if (err) {
+            msg.error(text);
+        } else {
+            msg.send(text);
+        }
+    });
+    dispatcher(msg);
+}
 
 /**
  * 响应 last order 的控制命令。
+ * @param {Misaka} misaka
  * @param {Object} cmd
  */
-Misaka.prototype.jobControl = function(cmd) {
-    var action = cmd.action
+function jobControl(misaka, cmd) {
+    var action = cmd.action;
     var jobId = cmd.jobId;
     var jobHash = cmd.jobHash;
     var isStatus = action === "status";
@@ -205,7 +236,7 @@ Misaka.prototype.jobControl = function(cmd) {
         debug("job is not found. [action:%s] [job-id:%s] [job-hash:%s]", action, jobId, jobHash);
 
         if (isStatus) {
-            this.send({
+            misaka.send({
                 text: "御坂充满怀疑的回复道，指定的任务 " + jobId + " 并不存在，或许早就结束了吧。",
                 jobId: jobId,
                 jobHash: jobHash
@@ -220,7 +251,7 @@ Misaka.prototype.jobControl = function(cmd) {
         queue.stop();
 
         if (isStatus) {
-            this.send({
+            misaka.send({
                 text: "御坂好奇的回答道，指定的任务 " + jobId + " 存在但是签名不匹配，或许御坂御坂强行遗忘了吧。",
                 jobId: jobId,
                 jobHash: jobHash
@@ -231,7 +262,7 @@ Misaka.prototype.jobControl = function(cmd) {
     }
 
     if (isStatus) {
-        this.send({
+        misaka.send({
             text: "御坂确定的回答道，指定的任务 " + jobId + " " + (queue.isDone()? "已经完成。": "仍在执行中，当前命令是：\n" + queue.current()),
             jobId: jobId,
             jobHash: jobHash
@@ -241,11 +272,11 @@ Misaka.prototype.jobControl = function(cmd) {
 
     switch (action) {
         case "watch":
-            queue.addWatcher(this._watcher);
+            queue.addWatcher(misaka._watcher);
             break;
 
         case "unwatch":
-            queue.removeWatcher(this._watcher);
+            queue.removeWatcher(misaka._watcher);
             break;
 
         case "stop":
@@ -255,4 +286,69 @@ Misaka.prototype.jobControl = function(cmd) {
         default:
             debug("unknown action. [action:%s] [job-id:%s] [job-hash:%s]", action, jobId, jobHash);
     }
-};
+}
+
+/**
+ * 控制脚本的启用/禁用。
+ * @param {Misaka} misaka
+ * @param {String} action
+ * @param {Object} scriptStatus
+ */
+function scriptsControl(misaka, action, scriptStatus) {
+    var changes = {};
+    var scripts = misaka._scripts;
+
+    debug("script control. [action:%s] [status:%j]", action, scriptStatus);
+
+    switch (action) {
+        case "set":
+            // 按照 last order 所说启用脚本，禁用所有未提到的脚本。
+            _.each(scriptStatus, function(status, name) {
+                changeScriptStatus(misaka, scripts, name, status);
+                changes[name] = true;
+            });
+
+            _.each(misaka._scripts, function(script, name) {
+                if (!changes.hasOwnProperty(name)) {
+                    script.disable();
+                }
+            });
+            break;
+
+        case "update":
+            // 启用/禁用指定的脚本。
+            _.each(scriptStatus, function(status, name) {
+                changeScriptStatus(misaka, scripts, name, status);
+            });
+            break;
+
+        default:
+            debug("unsupport script control action. [action:%s]", action);
+    }
+}
+
+function changeScriptStatus(misaka, scripts, name, status) {
+    var script;
+
+    if (status) {
+        if (scripts.hasOwnProperty(name)) {
+            Logger.log("script %s is enabled.", name);
+            scripts[name].enable();
+        } else {
+            script = new Script(name);
+            script.init(misaka);
+
+            if (script.loaded) {
+                Logger.log("script %s is loaded and enabled.", name);
+                scripts[name] = script.enable();
+            } else {
+                Logger.warn("script %s cannot be loaded.", name);
+            }
+        }
+    } else {
+        if (scripts.hasOwnProperty(name)) {
+            Logger.log("script %s is disabled.", name);
+            scripts[name].disable();
+        }
+    }
+}

@@ -1,4 +1,0 @@
-"use strict";
-
-// Ping 的应答。
-exports.response = "PONG";

@@ -5,8 +5,8 @@
 
 var debug = require("debug")("misaka");
 
-module.exports = function(misaka) {
-    var uptime = misaka.channel("uptime", {
+module.exports = function() {
+    var uptime = this.channel("uptime", {
         usage: "uptime",
         help: "显示御坂所在服务器的运行时间",
         pattern: /^uptime\s*$/i

@@ -5,8 +5,8 @@
 
 var _ = require("underscore");
 
-module.exports = function(misaka) {
-    var puppet = misaka.channel("puppet", {
+module.exports = function() {
+    var puppet = this.channel("puppet", {
         usage: "puppet <category...>",
         help: "执行 run-puppet 命令，执行 `$0 puppet help` 来查看这个命令支持的所有参数",
         pattern: /^puppet\s*(.*)$/i
@@ -15,12 +15,13 @@ module.exports = function(misaka) {
         var cmds = msg.match[1].split(/\s+/).filter(function(s) {
             return s;
         });
-
-        if (!cmds.length || _.indexOf(cmds, "help") >= 0) {
-            cmds = ["-h"];
-        }
-
         var queue = msg.queue;
+
+        // 显示帮助
+        if (!cmds.length || _.indexOf(cmds, "help") >= 0) {
+            queue.exec("/usr/bin/env", "run-puppet", "-h");
+            return;
+        }
 
         // 如果装了 rvm，需要使用 rvmsudo
         queue.exec("which rvmsudo", function(err) {
@@ -34,7 +35,7 @@ module.exports = function(misaka) {
             }
 
             queue.output = queue.errors = "";
-            queue.exec([sudo, "/usr/bin/env", "run-puppet", "--color=false", cmds]);
+            queue.exec([sudo, "/usr/bin/env", "run-puppet", cmds, "--", "--color=false"]);
         });
     });
 };
