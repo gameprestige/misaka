@@ -1,10 +1,11 @@
 #! /usr/bin/env node
 
 var facter = require("../utils/facter");
+var Logger = require("../utils/logger");
 
 facter.query("fqdn", function(err, facts) {
     if (err) {
-        console.error("fail to get fqdn. [err:%s]", err);
+        Logger.error("fail to get fqdn. [err:%s]", err);
         process.exit(1);
         return;
     }
