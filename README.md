@@ -11,7 +11,7 @@
 * 网络的核心是“最后之作”（Last Order），负责管理每一个御坂妹妹的状态，相当于一个中央控制器；
 * 每个御坂妹妹通过私有协议连接到“最后之作”，共享所有的记忆和运算能力。
 
-在 Game Prestige，御坂网络是运维的伙伴，负责实时汇报服务器状态，或者指定规定好的命令。
+在 Game Prestige，御坂网络是运维的伙伴，负责实时汇报服务器状态，或者执行规定好的命令。
 
 ## 使用御坂网络 ##
 
@@ -19,35 +19,35 @@
 
 要在本地运行御坂网络非常简单，只需要以下步骤。
 
-0. 安装 `facter`，Misaka 需要用它来获取系统信息：
+1. 安装 `facter`，Misaka 需要用它来获取系统信息：
 
-    gem install facter
+        gem install facter
 
-1. 获取 Last Order 代码：
+2. 获取 Last Order 代码：
 
-    git clone git@gitlab.gameprestige.com:op/hubot-last-order.git
+        git clone git@gitlab.gameprestige.com:op/hubot-last-order.git
 
-2. 安装 Last Order 的依赖：
+3. 安装 Last Order 的依赖：
 
-    cd hubot-last-order
-    npm install
+        cd hubot-last-order
+        npm install
 
-3. 运行 Last Order，此时要确保本地有一个监听 6379 端口的 redis 服务存在：
+4. 运行 Last Order，此时要确保本地有一个监听 6379 端口的 redis 服务存在：
 
-    bin/hubot.test
+        bin/hubot.test
 
-4. 获取 Misaka 代码：
+5. 获取 Misaka 代码：
 
-    git clone git@gitlab.gameprestige.com:op/misaka.git
+        git clone git@gitlab.gameprestige.com:op/misaka.git
 
-5. 安装 Misaka 的依赖：
+6. 安装 Misaka 的依赖：
 
-    cd misaka
-    npm install
+        cd misaka
+        npm install
 
-6. 运行 Misaka：
+7. 运行 Misaka：
 
-    bin/misaka.test
+        bin/misaka.test
 
 ### 与御坂网络交互 ###
 
@@ -123,6 +123,7 @@ module.exports = function(misaka) {
 
 比较需要实现的功能：
 
+* 允许单个 Misaka 接受 http 请求，从而可以作为 web hook 的响应程序；
 * 利用御坂网络所在服务器的空闲资源做分布式计算；
 * 御坂网络 P2P 传递信息和文件；
 * 限制 Misaka 实例占用的资源，限制 Misaka 和她执行的 shell 命令占用的总 CPU/内存量。
