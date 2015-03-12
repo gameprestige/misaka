@@ -39,6 +39,7 @@ function CommandQueue(cmd, done) {
     this._done = done;
     this._action = null;
     this._isDone = false;
+    this._errorCleared = false;
 }
 
 module.exports = CommandQueue;
@@ -152,6 +153,15 @@ CommandQueue.prototype.removeWatcher = function(watcher) {
         return w !== watcher;
     });
     return this;
+};
+
+/**
+ * 清除当前的错误标记，以便 CommandQueue 在出错之后依然能继续执行后续的命令。
+ * 如果出错后希望替换队列中所有命令，可以先调用 CommandQueue#clearError，然后
+ * 调用 CommandQueue#skip，最后加入新的命令。
+ */
+CommandQueue.prototype.clearError = function() {
+    this._errorCleared = true;
 };
 
 /**
@@ -317,13 +327,14 @@ CommandQueue.prototype.doExec = function() {
     function next(err) {
         if (info.cb) {
             try {
+                me._errorCleared = false;
                 info.cb(err, me);
             } catch (e) {
                 debug("fail to call command handler. [err:%s]", e);
             }
         }
 
-        if (err) {
+        if (err && !me._errorCleared) {
             me.skip();
             me._isDone = true;
 
@@ -347,6 +358,7 @@ CommandQueue.prototype.doExec = function() {
             return;
         }
 
+        me._errorCleared = false;
         me.doExec();
     }
 };

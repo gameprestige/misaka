@@ -4,6 +4,7 @@
 "use strict";
 
 var _ = require("underscore");
+var debug = require("debug")("misaka");
 
 module.exports = function() {
     var puppet = this.channel("puppet", {
@@ -19,12 +20,15 @@ module.exports = function() {
 
         // 显示帮助
         if (!cmds.length || _.indexOf(cmds, "help") >= 0) {
-            queue.exec("/usr/bin/env", "run-puppet", "-h");
+            debug("run-puppet show help. [cmds:%j]", cmds);
+            queue.exec(["/usr/bin/env", "run-puppet", "-h"]);
             return;
         }
 
         // 如果装了 rvm，需要使用 rvmsudo
         queue.exec("which rvmsudo", function(err) {
+            queue.clearError();
+
             var sudo;
 
             // 没有安装 rvm，使用普通 sudo
@@ -35,6 +39,7 @@ module.exports = function() {
             }
 
             queue.output = queue.errors = "";
+            debug("run-puppet: ready to execute command. [sudo:%s] [cmds:%j]", sudo, cmds);
             queue.exec([sudo, "/usr/bin/env", "run-puppet", cmds, "--", "--color=false"]);
         });
     });
