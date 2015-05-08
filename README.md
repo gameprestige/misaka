@@ -19,35 +19,28 @@
 
 要在本地运行御坂网络非常简单，只需要以下步骤。
 
-1. 安装 `facter`，Misaka 需要用它来获取系统信息：
+1. 在一个目录初始化 npm
 
-        gem install facter
+    mkdir my-misaka
+    cd my-misaka
+    npm init
 
-2. 获取 Last Order 代码：
+2. 获取 Misaka 代码
 
-        git clone git@gitlab.gameprestige.com:op/hubot-last-order.git
+    npm install --save misaka
 
-3. 安装 Last Order 的依赖：
+3. 随手写一个可以工作的 Misaka 脚本
 
-        cd hubot-last-order
-        npm install
+    mkdir scripts
+    cat > scripts/hello.js <<EOF
+    module.exports = function(misaka) {
+        misaka.send("Hello, everyone!");
+    }
+    EOF
 
-4. 运行 Last Order，此时要确保本地有一个监听 6379 端口的 redis 服务存在：
+3. 启动 Misaka
 
-        bin/hubot.test
-
-5. 获取 Misaka 代码：
-
-        git clone git@gitlab.gameprestige.com:op/misaka.git
-
-6. 安装 Misaka 的依赖：
-
-        cd misaka
-        npm install
-
-7. 运行 Misaka：
-
-        bin/misaka.test
+    node_modules/.bin/misaka
 
 ### 与御坂网络交互 ###
 
