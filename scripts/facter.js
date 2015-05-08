@@ -5,7 +5,8 @@
 
 var _ = require("underscore");
 
-var facter = require("../utils/facter");
+var facter = require("facter");
+var debug = require("debug")("misaka");
 
 module.exports = function() {
     var facts = this.channel("facter", {

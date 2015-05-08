@@ -4,7 +4,7 @@
 "use strict";
 
 var _ = require("underscore");
-var debug = require("debug")("misaka");
+var debug = require("debug")("misaka:brain");
 var setImmediate = require("timers").setImmediate;
 
 var SAVER_RETRY_INTERVAL = 5000; // 单位毫秒

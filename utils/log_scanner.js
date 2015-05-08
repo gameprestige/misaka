@@ -8,7 +8,7 @@
 var _ = require("underscore");
 var fs = require("fs");
 
-var debug = require("debug")("misaka");
+var debug = require("debug")("misaka:log_scanner");
 
 var POLLING_INTERVAL = 10 * 1000; // 10s
 var MAX_FILE_READ_SIZE = 256 * 1024; // 256KB

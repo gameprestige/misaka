@@ -12,11 +12,10 @@ var path = require("path");
 var io = require("socket.io-client");
 var request = require("request");
 
-var debug = require("debug")("misaka");
+var debug = require("debug")("misaka:app");
 var setImmediate = require("timers").setImmediate;
 
 var Misaka = require("./misaka");
-var Logger = require("./utils/logger");
 
 var LOGIN_RETRY_INTERVAL = 5 * 1000; // 5s 重试一次
 
@@ -25,7 +24,7 @@ function App() {
 
     this._lastOrderUrl = url.parse(ensureEnv("LAST_ORDER_URL"));
     this._sistersSecret = ensureEnv("SISTERS_SHARED_SECRET");
-    this._misaka = new Misaka(this);
+
     this._socket = null;
     this._connected = false;
 
@@ -38,9 +37,11 @@ module.exports = new App();
 /**
  * 启动 Misaka 服务。
  */
-App.prototype.start = function(node) {
+App.prototype.start = function(node, dirname) {
     debug("starting with name '%s'...", node);
     this._node = node;
+    this._dirname = dirname || ".";
+    this._misaka = new Misaka(this);
     this.connect();
 };
 
@@ -93,17 +94,17 @@ App.prototype.login = function(cb) {
             return;
         }
 
-        Logger.info("socket is connecting...");
+        debug("socket is connecting...");
 
         me._socket = socket;
         socket.on("connect", function() {
-            Logger.info("misaka connects to last order.");
+            debug("misaka connects to last order.");
             me._misaka.handleSocket(socket);
             me._connected = true;
             cb(socket);
         });
         socket.on("disconnect", function() {
-            Logger.info("misaka losts connection with last order.");
+            debug("misaka losts connection with last order.");
             me._socket = null;
             me._connected = false;
 
@@ -242,6 +243,13 @@ App.prototype.makeUrl = function(path, query) {
         pathname: path,
         query: query
     });
+};
+
+/**
+ * 返回应用的根目录。
+ */
+App.prototype.dirname = function() {
+    return this._dirname;
 };
 
 function ensureEnv(env) {

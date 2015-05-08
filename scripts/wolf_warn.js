@@ -6,10 +6,8 @@
 var _ = require("underscore");
 var debug = require("debug")("misaka");
 
-var LogScanner = require("../utils/log_scanner");
-
 module.exports = function(misaka) {
-    var scanner = new LogScanner(function(files) {
+    var scanner = misaka.scanner(function(files) {
         var lines = [];
         _.each(files, function(content, log) {
             if (!content) {

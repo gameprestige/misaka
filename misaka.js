@@ -4,19 +4,20 @@
 "use strict";
 
 var _ = require("underscore");
-var debug = require("debug")("misaka");
-var EventEmitter = require("events").EventEmitter;
+var path = require("path");
+var debug = require("debug")("misaka:misaka");
 
 var Message = require("./utils/message");
 var CommandQueue = require("./utils/command_queue");
 var Brain = require("./utils/brain");
 var Script = require("./utils/script");
-var Logger = require("./utils/logger");
+var LogScanner = require("./utils/log_scanner");
 
 var BRAIN_SAVE_TIMEOUT = 5000; // 单位毫秒
 
 function Misaka(app) {
     this._app = app;
+    this._scriptDir = path.resolve(path.join(app.dirname(), "scripts"));
     this._scripts = {};
 
     var me = this;
@@ -167,6 +168,14 @@ Misaka.prototype.enabled = function(name) {
 };
 
 /**
+ * 创建一个 LogScanner 用于跟踪文件变化。
+ * @param cb
+ */
+Misaka.prototype.scanner = function(cb) {
+    return new LogScanner(cb);
+};
+
+/**
  * 派发命令，通过正则表达式选择一个匹配的命令。
  * 注意，script 需要自行保证自己正则表达式的全局唯一性，一般有一个合适的命令前缀就不会有问题。
  * @param {Misaka} misaka
@@ -186,12 +195,12 @@ function dispatch(misaka, cmd, cb) {
     });
 
     if (!dispatcher) {
-        Logger.info("cannot find script to handle cmd. [cmd:%s]", msg.cmd);
+        debug("cannot find script to handle cmd. [cmd:%s]", msg.cmd);
         msg.error("御坂不支持这个命令：" + msg.cmd);
         return;
     }
 
-    Logger.info("dispatching cmd... [cmd:%s]", msg.cmd);
+    debug("dispatching cmd... [cmd:%s]", msg.cmd);
     msg.queue = new CommandQueue(cmd, function(err) {
         var lines = ["```", msg.queue.output, "```"];
         var text;
@@ -332,22 +341,22 @@ function changeScriptStatus(misaka, scripts, name, status) {
 
     if (status) {
         if (scripts.hasOwnProperty(name)) {
-            Logger.log("script %s is enabled.", name);
+            debug("script %s is enabled.", name);
             scripts[name].enable();
         } else {
-            script = new Script(name);
+            script = new Script(misaka._scriptDir, name);
             script.init(misaka);
 
             if (script.loaded) {
-                Logger.log("script %s is loaded and enabled.", name);
+                debug("script %s is loaded and enabled.", name);
                 scripts[name] = script.enable();
             } else {
-                Logger.warn("script %s cannot be loaded.", name);
+                debug("script %s cannot be loaded.", name);
             }
         }
     } else {
         if (scripts.hasOwnProperty(name)) {
-            Logger.log("script %s is disabled.", name);
+            debug("script %s is disabled.", name);
             scripts[name].disable();
         }
     }

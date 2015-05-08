@@ -6,7 +6,7 @@
 var _ = require("underscore");
 var fs = require("fs");
 
-var Logger = require("../utils/logger");
+var debug = require("debug")("misaka");
 
 module.exports = function(misaka) {
     var scripts = this.channel("scripts", {
@@ -17,7 +17,7 @@ module.exports = function(misaka) {
     scripts.on("message", function(msg) {
         fs.readdir(__dirname, function(err, files) {
             if (err) {
-                Logger.error("cannot open dir. [dir:%s] [err:%s]", __dirname, err);
+                debug("cannot open dir. [dir:%s] [err:%s]", __dirname, err);
                 msg.error("御坂无法读取脚本目录，错误是 " + err);
                 return;
             }

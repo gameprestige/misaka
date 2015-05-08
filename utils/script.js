@@ -6,23 +6,20 @@
 var _ = require("underscore");
 var path = require("path");
 var EventEmitter = require("events").EventEmitter;
-var debug = require("debug")("misaka");
-var Logger = require("./logger");
+var debug = require("debug")("misaka:script");
 
-var SCRIPTS_DIR = path.resolve(path.join(__dirname, "..", "scripts"));
-
-function Script(name) {
+function Script(base, name) {
     var script = null;
 
     try {
-        script = require(path.join(SCRIPTS_DIR, name));
+        script = require(path.join(base, name));
 
         if (!script || (typeof script !== "function" && typeof script.apply !== "function")) {
-            Logger.error("script doesn't export correct init function. [name:%s]", name);
+            debug("script doesn't export correct init function. [name:%s]", name);
             script = null;
         }
     } catch (e) {
-        Logger.error("cannot load script. [name:%s] [err:%s]", name, e);
+        debug("cannot load script. [name:%s] [err:%s]", name, e);
     }
 
     this._name = name;

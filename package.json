@@ -1,14 +1,14 @@
 {
   "name": "misaka",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Misaka client.",
   "main": "bin/misaka",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "bin": {
+    "misaka": "./bin/misaka"
   },
   "repository": {
     "type": "git",
-    "url": "git@gitlab.gameprestige.com:op/misaka.git"
+    "url": "https://github.com/gameprestige/misaka.git"
   },
   "keywords": [
     "misaka",
@@ -16,10 +16,15 @@
     "op",
     "robot"
   ],
-  "author": "Huan Du",
-  "license": "Commercial",
+  "author": {
+    "name": "Huan Du",
+    "email": "npm@huandu.me"
+  },
+  "readmeFilename": "README.md",
+  "license": "MIT",
   "dependencies": {
     "debug": "^2.1.1",
+    "fqdn": "^0.0.3",
     "moment": "^2.9.0",
     "request": "^2.53.0",
     "shell-quote": "^1.4.2",

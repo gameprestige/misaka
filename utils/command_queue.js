@@ -6,7 +6,7 @@
 var _ = require("underscore");
 
 var quote = require("shell-quote").quote;
-var debug = require("debug")("misaka");
+var debug = require("debug")("misaka:command_queue");
 var spawn = require("child_process").spawn;
 var setImmediate = require("timers").setImmediate;
 
