@@ -21,26 +21,26 @@
 
 1. 在一个目录初始化 npm
 
-    mkdir my-misaka
-    cd my-misaka
-    npm init
+        mkdir my-misaka
+        cd my-misaka
+        npm init
 
 2. 获取 Misaka 代码
 
-    npm install --save misaka
+        npm install --save misaka
 
 3. 随手写一个可以工作的 Misaka 脚本
 
-    mkdir scripts
-    cat > scripts/hello.js <<EOF
-    module.exports = function(misaka) {
-        misaka.send("Hello, everyone!");
-    }
-    EOF
+        mkdir scripts
+        cat > scripts/hello.js <<EOF
+        module.exports = function(misaka) {
+            misaka.send("Hello, everyone!");
+        }
+        EOF
 
 3. 启动 Misaka
 
-    node_modules/.bin/misaka
+        node_modules/.bin/misaka
 
 ### 与御坂网络交互 ###
 
