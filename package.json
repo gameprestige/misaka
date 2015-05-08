@@ -1,7 +1,7 @@
 {
   "name": "misaka",
   "version": "0.1.0",
-  "description": "Misaka client.",
+  "description": "御坂网络的雏形",
   "main": "bin/misaka",
   "bin": {
     "misaka": "./bin/misaka"
